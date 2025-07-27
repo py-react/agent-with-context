@@ -1,0 +1,29 @@
+export const $Body__api_agent_context_post = {
+	properties: {
+		file: {
+	type: 'any-of',
+	contains: [{
+	type: 'binary',
+	format: 'binary',
+}, {
+	type: 'null',
+}],
+},
+		description: {
+	type: 'any-of',
+	contains: [{
+	type: 'string',
+}, {
+	type: 'null',
+}],
+},
+		tags: {
+	type: 'any-of',
+	contains: [{
+	type: 'string',
+}, {
+	type: 'null',
+}],
+},
+	},
+} as const;

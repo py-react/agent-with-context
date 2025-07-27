@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data_agent:/data
+    command: redis-server --appendonly yes
+    networks:
+      - agent-network
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: agent_context
+      POSTGRES_USER: agent_user
+      POSTGRES_PASSWORD: agent_password
+    volumes:
+      - postgres_data_agent:/var/lib/postgresql/data
+    networks:
+      - agent-network
+
+volumes:
+  redis_data_agent:
+  postgres_data_agent:
+
+networks:
+  agent-network:
+    driver: bridge

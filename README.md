@@ -9,8 +9,10 @@ A powerful AI agent system built with render_relay framework, featuring Redis st
 - 🧠 **Vector Database Context** - PostgreSQL + pgvector for semantic context storage
 - 🔧 **Gemini LLM Integration** - Google's Gemini model via LangChain with Pydantic
 - 📊 **Health Monitoring** - Service health checks and diagnostics
-- 🚀 **render_relay Framework** - FastAPI + React with hot reloading
+- 🚀 **render_relay Framework** - FastAPI + React
 - 🔄 **Alembic Migrations** - Version-controlled database schema management
+- 🏭 **Factory Pattern Architecture** - Clean dependency injection and service management
+- 🧩 **Service Mixins** - Modular service composition for maintainability
 
 ## Quick Start
 
@@ -63,28 +65,11 @@ npm run dev
 curl http://localhost:5001/api/health
 ```
 
-#### Redis Test
-```bash
-curl http://localhost:5001/api/redis_test
-```
-
-#### Vector Database Test
-```bash
-curl http://localhost:5001/api/vector_test
-```
-
-#### LLM Test
-```bash
-curl -X POST http://localhost:5001/api/llm_test \
-  -H "Content-Type: application/json" \
-  -d '{"message": "Hello, how are you?"}'
-```
-
 #### Create Agent Session
 ```bash
-curl -X POST http://localhost:5001/api/agent/chat \
+curl -X POST http://localhost:5001/api/agent \
   -H "Content-Type: application/json" \
-  -d '{"message": "Hello, I need help with a project"}'
+  -d '{"initial_message": "Hello, I need help with a project"}'
 ```
 
 #### Send Message to Agent
@@ -94,91 +79,352 @@ curl -X POST http://localhost:5001/api/agent/chat \
   -d '{"session_id": "your-session-id", "message": "Can you help me with Python?"}'
 ```
 
+#### List Available Tools
+```bash
+curl http://localhost:5001/api/mcp_tools
+```
+
+#### Execute Tool Directly
+```bash
+curl -X POST http://localhost:5001/api/mcp_tools \
+  -H "Content-Type: application/json" \
+  -d '{"tool_name": "get_current_datetime", "parameters": {}}'
+```
+
 ## How the Agent Works
 
-### Agent Behavior & Workflow
+### Architecture Overview
 
-The agent follows a sophisticated workflow powered by LangGraph:
-
-1. **Message Reception**: User message is received and session is validated
-2. **Intent Analysis**: LLM analyzes the message to determine user intent
-3. **Tool Selection**: Based on intent, relevant tools are selected
-4. **Context Retrieval**: Semantic search finds relevant context from vector database
-5. **Tool Execution**: Selected tools are executed with context
-6. **Response Generation**: LLM generates response using tool results and context
-7. **State Persistence**: Conversation state is saved to Redis and PostgreSQL
-
-### Data Flow Architecture
+The system uses a sophisticated factory pattern with dependency injection and service mixins:
 
 ```mermaid
 graph TD
-    A[User Message] --> B[FastAPI Endpoint]
-    B --> C[Agent Workflow]
-    C --> D[Get Session State]
-    D --> E{Session in Redis?}
-    E -->|Yes| F[Load from Redis]
-    E -->|No| G[Load from PostgreSQL]
-    G --> H[Cache in Redis]
-    F --> I[Intent Analysis]
-    H --> I
-    I --> J[Tool Selection]
-    J --> K{Tools Selected?}
-    K -->|Yes| L[Execute Tools]
-    K -->|No| M[Generate Response]
-    L --> N{Context Tool?}
-    N -->|Yes| O[Vector Database Search]
-    N -->|No| P[Execute Other Tools]
-    O --> Q[Get Relevant Context]
-    P --> R[Tool Results]
-    Q --> R
-    R --> S[Generate Response]
-    M --> T[Save State]
-    S --> T
-    T --> U[Redis Cache]
-    T --> V[PostgreSQL Storage]
-    U --> W[Return Response]
-    V --> W
-    W --> X[User]
+    A[FastAPI App] --> B[Application Initialization]
+    B --> C[Tool Factory]
+    B --> D[Service Factory]
+    B --> E[Workflow Factory]
     
-    style A fill:#e1f5fe
-    style X fill:#e1f5fe
-    style F fill:#c8e6c9
-    style G fill:#fff3e0
-    style U fill:#c8e6c9
-    style V fill:#fff3e0
-    style O fill:#ffecb3
-    style N fill:#ffecb3
+    C --> F[Tools Collection]
+    D --> G[Database Service]
+    D --> H[Redis Service]
+    D --> I[Context Service]
+    D --> J[Vector Service]
+    D --> K[Message History Service]
+    D --> L[Agent Service]
+    D --> M[LangGraph Service]
+    D --> N[Session Service]
+    
+    E --> O[Agent Workflow]
+    E --> P[LangGraph Workflow]
+    
+    N --> Q[SessionMixin]
+    N --> R[ContextMixin]
+    N --> S[MessageMixin]
+    N --> T[StateMixin]
+    N --> U[ToolMixin]
+    
+    O --> V[Uses Service Factory]
+    P --> W[Uses Service Factory]
+    
+    V --> D
+    W --> D
 ```
 
-#### Detailed Data Flow:
+### Agent Workflow & Processing
 
-1. **Request Processing**
-   - User sends message via API
-   - FastAPI validates request and extracts session ID
-   - Agent workflow is triggered
+The agent follows a sophisticated multi-layered workflow:
 
-2. **Session State Retrieval**
-   - **Redis Check**: First tries to get session from Redis (fast)
-   - **PostgreSQL Fallback**: If Redis miss, loads from PostgreSQL (persistent)
-   - **Redis Caching**: Loaded data is cached back to Redis for future access
+#### 1. Application Initialization
+```mermaid
+graph LR
+    A[Start App] --> B[Tool Factory]
+    B --> C[Get Tools]
+    C --> D[Service Factory]
+    D --> E[Initialize Services with Tools]
+    E --> F[Update Services with Tools]
+    F --> G[Workflow Factory]
+    G --> H[Set Service Factory Reference]
+    H --> I[Initialize Workflows with Tools]
+    I --> J[Initialize Async Services]
+    J --> K[Ready]
+    
+    E --> L[Create All Services]
+    L --> M[Database Service]
+    L --> N[Redis Service]
+    L --> O[Context Service]
+    L --> P[Vector Service]
+    L --> Q[Message History Service]
+    L --> R[Agent Service]
+    L --> S[LangGraph Service]
+    L --> T[Session Service]
+    
+    I --> U[Create Agent Workflow]
+    I --> V[Create LangGraph Workflow]
+    
+    U --> W[Uses Session Service from Service Factory]
+    V --> X[Uses Tools]
+```
 
-3. **Agent Processing**
-   - **Intent Analysis**: LLM determines what the user wants
-   - **Tool Selection**: Based on intent, relevant tools are chosen
-   - **Tool Execution**: 
-     - If context tool is selected → Vector database search for relevant context
-     - If other tools are selected → Execute those tools directly
-     - If no tools needed → Skip to response generation
-   - **Response Generation**: LLM creates response using tool results and context
+#### 2. Message Processing Flow
+```mermaid
+graph TD
+    A[User Message] --> B[POST /api/agent/chat]
+    B --> C[Validate Request]
+    C --> D[Get Agent Workflow]
+    D --> E{Session ID?}
+    
+    E -->|No| F[Create Session]
+    E -->|Yes| G[Process Message]
+    
+    F --> H[create_session]
+    G --> I[process_message]
+    
+    H --> J[Agent Workflow]
+    I --> J
+    
+    J --> K[Get Session Service]
+    K --> L[Session Service]
+    L --> M{Session Exists?}
+    
+    M -->|Yes| N[Load State]
+    M -->|No| O[Create Session]
+    
+    N --> P[Intent Analysis]
+    O --> P
+    
+    P --> Q[Tool Selection]
+    Q --> R{Tools Needed?}
+    
+    R -->|Yes| S[Execute Tools]
+    R -->|No| T[Generate Response]
+    
+    S --> U[Get Context]
+    U --> V[Run Tools]
+    V --> W[Create Response]
+    
+    T --> X[Save State]
+    W --> X
+    X --> Y[Redis Cache]
+    X --> Z[PostgreSQL]
+    
+    Y --> AA[Return Response]
+    Z --> AA
+    AA --> BB[User]
+```
 
-4. **State Persistence (Write-Through)**
-   - **Redis**: Fast cache with 1-hour TTL for active sessions
-   - **PostgreSQL**: Permanent storage for all conversations
-   - **Automatic Sync**: Every update goes to both systems simultaneously
+### Detailed Agent Processing Steps
 
-5. **Response Delivery**
-   - Final response is returned to user
-   - Session state is updated in both Redis and PostgreSQL
+#### 1. **Request Reception & Validation**
+- FastAPI receives HTTP request
+- Validates request format and session ID
+- Routes to appropriate workflow handler
+
+#### 2. **Session State Management**
+- **Session Service** (using mixins):
+  - **SessionMixin**: Manages session lifecycle
+  - **StateMixin**: Handles Redis/PostgreSQL state
+  - **MessageMixin**: Manages conversation history
+  - **ContextMixin**: Handles context storage
+  - **ToolMixin**: Manages tool interactions
+
+#### 3. **Intent Analysis & Tool Selection**
+- **LangGraph Workflow Service**:
+  - Analyzes user message for intent
+  - Determines required tools based on intent
+  - Selects appropriate tools from available collection
+
+#### 4. **Context Retrieval & Tool Execution**
+- **Context Tool**: Searches vector database for relevant context
+- **Other Tools**: Execute based on user request
+- **Tool Results**: Collected and formatted for LLM
+
+#### 5. **Response Generation**
+- **Agent Service**: Uses LangChain agent with tools
+- **LLM Integration**: Google Gemini processes request with context
+- **Response Formatting**: Structured response with tool usage info
+
+#### 6. **State Persistence**
+- **Write-Through Strategy**:
+  - **Redis**: Fast cache with 1-hour TTL
+  - **PostgreSQL**: Permanent storage with full history
+  - **Automatic Sync**: All updates go to both systems
+
+### Service Architecture
+
+#### Factory Pattern Implementation
+
+```python
+# Service Factory - Manages all service dependencies
+class ServiceFactory:
+    - DatabaseService
+    - RedisService  
+    - ContextService
+    - VectorService
+    - MessageHistoryService
+    - AgentService
+    - LangGraphService
+    - SessionService (unified)
+
+# Workflow Factory - Manages workflow dependencies
+class WorkflowFactory:
+    - AgentWorkflow
+    - LangGraphWorkflowService
+
+# Tool Factory - Manages available tools
+class ToolFactory:
+    - get_current_datetime
+    - get_weather
+    - check_system_health
+    - calculate
+    - retrieve_session_context
+    - execute_terminal_command
+    - list_safe_commands
+    - get_command_help
+```
+
+#### Service Mixin Architecture
+
+The **SessionService** uses a mixin pattern for modular functionality:
+
+```python
+class SessionService(SessionMixin, ContextMixin, MessageMixin, StateMixin, ToolMixin):
+    """
+    Unified service combining all session-related operations:
+    
+    - SessionMixin: Session lifecycle management
+    - ContextMixin: Context storage and retrieval
+    - MessageMixin: Message history management
+    - StateMixin: Redis/PostgreSQL state handling
+    - ToolMixin: Tool execution and management
+    """
+```
+
+### Data Flow Architecture
+
+#### Write-Through Data Strategy
+
+```mermaid
+graph LR
+    A[User Message] --> B[Agent Processing]
+    B --> C[Save State]
+    C --> D[Redis Cache<br/>Fast Access<br/>1-hour TTL]
+    C --> E[PostgreSQL<br/>Permanent Storage<br/>Full History]
+    
+    F[Retrieve Session] --> G{Redis Hit?}
+    G -->|Yes| H[Fast Response]
+    G -->|No| I[Load from PostgreSQL]
+    I --> J[Cache in Redis]
+    J --> H
+```
+
+**Key Benefits:**
+- **Redis**: Sub-millisecond access for active sessions
+- **PostgreSQL**: ACID compliance and data integrity
+- **Automatic Fallback**: Redis miss → PostgreSQL → Redis cache
+- **No Data Loss**: All conversations permanently stored
+
+### Tool System
+
+#### Available Tools
+
+The agent has access to several specialized tools:
+
+1. **Context Tools**:
+   - `retrieve_session_context`: Semantic search for relevant context
+
+2. **Utility Tools**:
+   - `get_current_datetime`: Get current date/time
+   - `calculate`: Mathematical calculations
+   - `get_weather`: Weather information
+
+3. **System Tools**:
+   - `check_system_health`: System diagnostics
+
+#### Tool Selection Logic
+
+Tools are automatically selected based on:
+- **Intent Analysis**: LLM determines user intent
+- **Tool Requirements**: Intent maps to required tools
+- **Context Relevance**: Tools that need context are prioritized
+- **Safety Checks**: Terminal commands are validated
+
+### Context Management
+
+#### Vector Database Integration
+
+The system uses PostgreSQL + pgvector for semantic context storage:
+
+- **Semantic Search**: Context retrieved based on meaning, not keywords
+- **File Chunking**: Large documents automatically split
+- **Embedding Storage**: Google's embedding-001 model
+- **Session Isolation**: Each session has independent context space
+
+#### Context Types Supported
+
+- **Text Context**: Simple text information
+- **File Content**: Uploaded documents (PDF, DOCX, TXT)
+- **Structured Data**: JSON objects and metadata
+- **List Items**: Collections of related information
+
+### Configuration Management
+
+The system uses a centralized configuration system:
+
+```python
+class Config:
+    # Redis Configuration
+    REDIS_URL: str
+    
+    # PostgreSQL + pgvector Configuration
+    POSTGRES_HOST: str
+    POSTGRES_PORT: int
+    POSTGRES_USER: str
+    POSTGRES_PASSWORD: str
+    POSTGRES_DB: str
+    
+    # Gemini Configuration
+    GEMINI_API_KEY: str
+    GEMINI_MODEL: str
+    GEMINI_TEMPERATURE: float
+    
+    # Agent Configuration
+    MAX_CONTEXT_LENGTH: int
+    AGENT_STATE_TTL: int
+    
+    # Vector Database Configuration
+    EMBEDDING_MODEL: str
+    MAX_CONTEXT_CHUNKS: int
+    CONTEXT_CHUNK_SIZE: int
+    CONTEXT_CHUNK_OVERLAP: int
+    
+    # Limits Configuration
+    DEFAULT_MESSAGE_LIMIT: int
+    MAX_MESSAGE_LIMIT: int
+    DEFAULT_CONTEXT_LIMIT: int
+    MAX_CONTEXT_LIMIT: int
+    CONTEXT_SEARCH_LIMIT: int
+    CONTEXT_SIMILARITY_THRESHOLD: float
+```
+
+## API Endpoints
+
+### Core Agent Endpoints
+
+- `GET /api/health` - System health check
+- `GET /api/agent/sessions` - List all sessions
+- `POST /api/agent` - Create new session
+- `GET /api/agent` - Get session information
+- `POST /api/agent/chat` - Send message to agent
+- `GET /api/agent/chat` - Get chat messages
+- `GET /api/agent/context` - Get session context
+- `PUT /api/agent/context` - Add context to session
+
+### Tool Management
+
+- `GET /api/mcp_tools` - List available tools
+- `POST /api/mcp_tools` - Execute tool directly
+
+
 
 ## Database Migrations
 
@@ -211,21 +457,6 @@ python scripts/migrate.py current
 python scripts/migrate.py history
 ```
 
-### Manual Alembic Commands
-```bash
-# Generate migration from model changes
-alembic revision --autogenerate -m "Description of changes"
-
-# Apply migrations
-alembic upgrade head
-
-# Rollback to specific revision
-alembic downgrade <revision_id>
-
-# Show current migration
-alembic current
-```
-
 ## Adding Tools to the Agent
 
 ### Tool Development Guide
@@ -234,10 +465,10 @@ Tools extend the agent's capabilities and are automatically selected based on us
 
 #### 1. Create a New Tool
 
-Create a new file in `agent_with_context/tools/`:
+Create a new file in `app/tools/`:
 
 ```python
-# agent_with_context/tools/my_tool.py
+# app/tools/my_tool.py
 from langchain_core.tools import tool
 from render_relay.utils.get_logger import get_logger
 
@@ -266,187 +497,83 @@ def my_tool_function(input_param: str) -> str:
 
 #### 2. Register the Tool
 
-Add your tool to `agent_with_context/tools/__init__.py`:
+Add your tool to `app/factory/tool_factory.py`:
 
 ```python
-from .my_tool import my_tool_function
+from ..tools.my_tool import my_tool_function
 
-BASE_TOOLS = [
-    # ... existing tools ...
-    my_tool_function,
-]
+class ToolFactory:
+    def __init__(self):
+        self.tools = [
+            # ... existing tools ...
+            my_tool_function,
+        ]
 ```
 
-#### 3. Tool Selection Logic
-
-Tools are automatically selected based on:
-- **Intent Analysis**: LLM determines user intent
-- **Tool Requirements**: Intent maps to required tools
-- **Context Relevance**: Tools that need context are prioritized
-
-#### 4. Tool Best Practices
+#### 3. Tool Best Practices
 
 - **Clear Descriptions**: Help LLM understand when to use the tool
 - **Error Handling**: Always handle exceptions gracefully
 - **Logging**: Use structured logging for debugging
-- **Async Support**: Implement `_arun` for async operations
 - **Type Hints**: Use proper type annotations
+- **Safety**: Validate inputs and outputs
 
-### Example Tool Implementation
+## Architecture Benefits
 
-```python
-@tool
-async def get_weather(location: str) -> str:
-    """
-    Get current weather information for a location.
-    
-    Args:
-        location: City name or coordinates
-        
-    Returns:
-        Weather information including temperature, conditions, and forecast
-    """
-    try:
-        # Async weather API call
-        weather_data = await weather_api.get_weather(location)
-        return f"Weather in {location}: {weather_data}"
-    except Exception as e:
-        logger.error(f"Weather tool failed: {e}")
-        return f"Unable to get weather for {location}: {str(e)}"
-```
+### Factory Pattern Benefits
+- **Dependency Injection**: Clean service management
+- **Testability**: Easy to mock and test components
+- **Maintainability**: Clear separation of concerns
+- **Scalability**: Easy to add new services and tools
 
-## API Endpoints
-**checkout /docs**
+### Service Mixin Benefits
+- **Modularity**: Reusable service components
+- **Composition**: Combine functionality as needed
+- **Maintainability**: Isolated functionality
+- **Flexibility**: Easy to extend and modify
 
-## Vector Database Context System
-
-The system uses PostgreSQL + pgvector for semantic context storage:
-
-### Features
-- **Semantic Search**: Context is retrieved based on semantic similarity
-- **File Chunking**: Large documents are automatically split into manageable chunks
-- **Embedding Storage**: All context is stored as embeddings using Google's embedding-001 model
-- **Session Isolation**: Each session has its own context space
-- **Tool Integration**: Context retrieval is available as an agent tool
-
-### Context Types
-- **Text Context**: Simple text information
-- **File Content**: Uploaded documents and files
-- **Structured Data**: JSON objects and metadata
-- **List Items**: Collections of related information
-
-### Usage Examples
-
-#### Upload a File
-```bash
-curl -X POST http://localhost:5001/api/agent/context?session_id={session_id} \
-  -F "file=@document.pdf" \
-  -F "description=Project documentation" \
-  -F "tags=docs,project"
-```
-
-#### Set Context
-```bash
-curl -X POST http://localhost:5001/api/agent/context?session_id={session_id} \
-  -H "Content-Type: application/json" \
-  -d '{
-    "context": {
-      "user_preferences": "I prefer Python programming",
-      "project_info": "Working on an AI agent system"
-    }
-  }'
-```
-
-#### Ask About Context
-```bash
-curl -X POST http://localhost:5001/api/agent/chat \
-  -H "Content-Type: application/json" \
-  -d '{
-    "session_id": "your-session-id",
-    "message": "What files did I upload earlier?"
-  }'
-```
-
-## Architecture
-
-### System Components
-
-1. **FastAPI Backend**: RESTful API with async support
-2. **LangGraph Workflow**: Orchestrates agent behavior
-3. **Redis Cache**: Fast session state access
-4. **PostgreSQL + pgvector**: Persistent storage and semantic search
-5. **Gemini LLM**: Natural language processing
-6. **Tool System**: Extensible functionality
-
-### Data Storage Strategy
-
-#### Write-Through Architecture
-
-```mermaid
-graph LR
-    A[User Message] --> B[Agent Processing]
-    B --> C[Save State]
-    C --> D[Redis Cache<br/>Fast Access<br/>1-hour TTL]
-    C --> E[PostgreSQL<br/>Permanent Storage<br/>Full History]
-    
-    F[Retrieve Session] --> G{Redis Hit?}
-    G -->|Yes| H[Fast Response]
-    G -->|No| I[Load from PostgreSQL]
-    I --> J[Cache in Redis]
-    J --> H
-    
-    style D fill:#c8e6c9
-    style E fill:#fff3e0
-    style H fill:#e1f5fe
-```
-
-**Key Benefits:**
-- **Redis**: Fast access with 1-hour TTL
-- **PostgreSQL**: Persistent storage with full history
-- **Automatic Fallback**: Redis miss → PostgreSQL → Redis cache
-- **No Data Loss**: All conversations permanently stored
-
-#### Benefits
-- **Performance**: Sub-millisecond Redis access
+### Write-Through Architecture Benefits
+- **Performance**: Fast Redis access for active sessions
 - **Reliability**: PostgreSQL ensures data safety
 - **Scalability**: TTL prevents memory bloat
 - **Recovery**: Automatic system recovery
-
-### Benefits
-- **Scalability**: Handles large files and documents efficiently
-- **Semantic Search**: Context retrieval based on meaning, not just keywords
-- **Performance**: Only retrieves relevant context when needed
-- **Flexibility**: Easy to switch between different vector databases
-- **Reliability**: PostgreSQL provides ACID compliance and data integrity
 
 ## Development
 
 ### Project Structure
 ```
 agent_with_context/
-├── models/              # Database models and repositories
-├── services/            # Business logic services
-├── tools/               # Agent tools
-├── config.py           # Configuration management
-├── database.py         # Database connection setup
-└── main.py             # FastAPI application
+├── app/
+│   ├── config/           # Configuration management
+│   ├── db/              # Database models and repositories
+│   ├── factory/         # Factory pattern implementations
+│   ├── services/        # Business logic services
+│   │   └── mixins/      # Service mixins for modularity
+│   ├── tools/           # Agent tools
+│   ├── workflow/        # Workflow management
+│   ├── initialize.py    # Application initialization
+│   └── main.py          # FastAPI application
+├── src/                 # Frontend React components and api endpoints
+├── scripts/             # Utility scripts
+├── migrations/          # Database migrations
+└── requirements.txt     # Python dependencies
 ```
 
-### Adding New Tools
-1. Create tool class in `agent_with_context/tools/`
-2. Inherit from `BaseTool` or use `@tool` decorator
-3. Implement `_run` and `_arun` methods
-4. Add to `BASE_TOOLS` in `__init__.py`
+### Key Components
 
-### Customizing Context Storage
-- Modify `VectorService` for different vector databases
-- Adjust chunking parameters in configuration
-- Customize embedding model in `config.py`
+1. **Factory Pattern**: Manages service dependencies and initialization
+2. **Service Mixins**: Modular service composition
+3. **Workflow Management**: Orchestrates agent behavior
+4. **Tool System**: Extensible functionality
+5. **Context Management**: Vector database integration
+6. **State Management**: Redis/PostgreSQL hybrid
 
-### Monitoring
-- Check vector database stats via `/api/vector_test`
-- Monitor context usage in agent responses
-- Review session statistics for optimization
+### Monitoring & Debugging
+
+- **Health Checks**: `/api/health` for system status
+- **Logging**: Structured logging throughout the system
+- **Performance**: Timing information in logs
+- **Error Handling**: Graceful error recovery
 
 ## FAQ
 
@@ -464,7 +591,7 @@ A: Conversations are permanently stored in PostgreSQL. Redis has a 1-hour TTL fo
 ### Tool Development
 
 **Q: How do I add a new tool to the agent?**
-A: Create a new Python file in the `tools/` directory, implement the tool logic, and register it in `__init__.py`. The agent will automatically select tools based on user intent.
+A: Create a new Python file in the `app/tools/` directory, implement the tool logic, and register it in `app/factory/tool_factory.py`. The agent will automatically select tools based on user intent.
 
 **Q: Can tools access the conversation history?**
 A: Yes, tools can access the current conversation context and session data through the workflow state.
@@ -475,7 +602,7 @@ A: The LLM analyzes user intent and selects relevant tools. Tools can also be co
 ### Database & Migrations
 
 **Q: How do I add a new database table?**
-A: Create a new model in `models/database.py`, then run `python scripts/migrate.py create "Add new table"` to generate a migration.
+A: Create a new model in `app/db/models/`, then run `python scripts/migrate.py create "Add new table"` to generate a migration.
 
 **Q: Can I rollback database changes?**
 A: Yes, use `python scripts/migrate.py downgrade` to rollback the last migration, or `alembic downgrade <revision_id>` for specific revisions.
@@ -486,7 +613,7 @@ A: Redis provides fast, temporary storage for active sessions, while PostgreSQL 
 ### Context & Files
 
 **Q: How are files processed and stored?**
-A: Files are chunked into smaller pieces, converted to embeddings using Google's embedding model, and stored in PostgreSQL with pgvector for semantic search.
+A: Files are chunked into smaller pieces, converted to embeddings using embedding model, and stored in PostgreSQL with pgvector for semantic search.
 
 **Q: Can I upload multiple file types?**
 A: Yes, the system supports various file types including PDF, DOCX, TXT, and more. Files are processed and stored as searchable context.
@@ -510,13 +637,9 @@ A: Monitor Redis hit rates, optimize database queries, and adjust chunking param
 **Q: Migrations are failing. What do I do?**
 A: Check the migration history with `python scripts/migrate.py history`, ensure your database is running, and verify the connection settings in your `.env` file.
 
-**Q: How do I reset the system completely?**
-A: Clear Redis with `docker exec -it agent-with-context-redis-1 redis-cli FLUSHALL`, drop and recreate the PostgreSQL database, then run `alembic upgrade head`.
 
 ### Integration & Deployment
 
-**Q: Can I deploy this to production?**
-A: Nope, the system is not production-ready with proper error handling, logging, and data persistence.
 
 **Q: How do I integrate this with my existing system?**
 A: The system provides RESTful APIs that can be easily integrated with any frontend or backend system.

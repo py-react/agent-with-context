@@ -174,12 +174,12 @@ graph TD
     D --> E{Session ID?}
     
     E -->|No| F[Create Session]
-    E -->|Yes| G[Process Message]
+    E -->|Yes| G[Load Existing Session]
     
     F --> H[create_session]
-    G --> I[process_message]
+    G --> I[load_session]
     
-    H --> J[Agent Workflow]
+    H --> J[Process Message]
     I --> J
     
     J --> K[Get Session Service]
